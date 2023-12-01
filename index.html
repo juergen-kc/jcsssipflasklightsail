@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <title>SSSIP - Self-Service Software Installation Portal</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f4f7;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            margin: 30px 0;
+        }
+        .logo-container img {
+            max-width: 200px;
+            height: auto;
+        }
+        h1 {
+            color: #2c3e50;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        h2 {
+            color: #34495e;
+            font-weight: 500;
+            text-align: left;
+            margin: 20px 0;
+        }
+        p {
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        #apps, #devices {
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 25px;
+            font-size: 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .app-info {
+            padding: 10px;
+            border-bottom: 1px solid #ececec;
+            margin-bottom: 5px;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #ffffff;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 6px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            z-index: 1001;
+            display: none;
+        }
+        .notification p {
+            margin-bottom: 20px;
+        }
+        .notification button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!--
+    <div class="logo-container">
+        <img src="logo.png" alt="SSSIP Logo">
+    </div>
+    -->
+
+    <div id="user-info">Loading user info...</div>
+    <h2>SSSIP - Self-Service Software Installation Portal</h2>
+
+    <h3>Your Devices</h3>
+    <p>Select the device on which you want to install the software:</p>
+    <select id="devices" onchange="loadAppsForSelectedDevice()">
+        <!-- Device options will be loaded here -->
+    </select>
+    
+    <h2>Available Software</h2>
+    <p>Select the software you want to install:</p>
+    <div id="apps"></div>
+    
+    <button onclick="installSoftware()">Install</button>
+
+    <div id="notification" class="notification">
+        <p id="notification-message"></p>
+        <button onclick="closeNotification()">OK</button>
+    </div>
+
+    <script>
+async function loadApps() {
+    try {
+        const response = await fetch('/api/apps');
+        if (!response.ok) throw new Error('Network response was not ok.');
+        const apps = await response.json();
+        console.log("Apps loaded with versions:", apps.map(app => ({ name: app.displayName, version: app.packageVersion })));
+
+
+        const appsContainer = document.getElementById('apps');
+        appsContainer.innerHTML = ''; // Clear existing apps
+        apps.forEach(app => {
+            const appElement = document.createElement('div');
+            appElement.className = 'app-info';
+
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'app';
+            radio.value = app.id;
+
+            const label = document.createElement('label');
+            label.appendChild(radio);
+
+            // Create strong element for display name
+            const displayName = document.createElement('strong');
+            displayName.textContent = app.displayName;
+            label.appendChild(displayName);
+
+            // Add version info
+            const versionInfo = document.createElement('div');
+            versionInfo.textContent = `Version: ${app.packageVersion || 'N/A'}`;
+            label.appendChild(versionInfo);
+
+            // Add description
+            const description = document.createElement('div');
+            description.textContent = `Description: ${app.description || 'No description available.'}`;
+            label.appendChild(description);
+
+            // Add size info
+            const sizeInfo = document.createElement('div');
+            sizeInfo.textContent = `Size: ${app.size || 'Unknown'}`;
+            label.appendChild(sizeInfo);
+
+            // Append the label to the app element
+            appElement.appendChild(label);
+
+            // Append the app element to the apps container
+            appsContainer.appendChild(appElement);
+        });
+    } catch (error) {
+        console.error('Error fetching applications:', error);
+    }
+}
+
+// This function is called whenever the selected device changes
+async function loadAppsForSelectedDevice() {
+  try {
+    const devicesSelect = document.getElementById('devices');
+    const selectedDeviceOS = devicesSelect.options[devicesSelect.selectedIndex].getAttribute('data-os');
+    const encodedOS = encodeURIComponent(selectedDeviceOS); // Encode the OS for use in the URL
+    const response = await fetch(`/api/apps?os=${encodedOS}`);
+    if (!response.ok) throw new Error('Network response was not ok.');
+    const apps = await response.json();
+
+    console.log("Apps loaded:", apps); // Debug: log the apps data
+
+    const appsContainer = document.getElementById('apps');
+    appsContainer.innerHTML = ''; // Clear existing apps
+
+    apps.forEach(app => {
+      // Check if settings array exists and has at least one entry
+      const version = app.settings && app.settings.length > 0 && app.settings[0].packageVersion
+                      ? app.settings[0].packageVersion
+                      : 'N/A';
+
+      console.log("Rendering app:", app.displayName, "Version:", version); // Debug: log the app being rendered
+
+      const appElement = document.createElement('div');
+      appElement.className = 'app-info';
+
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'app';
+      radio.value = app.id;
+
+      const label = document.createElement('label');
+      label.appendChild(radio);
+
+      // Create strong element for display name
+      const displayName = document.createElement('strong');
+      displayName.textContent = app.displayName;
+      label.appendChild(displayName);
+
+      // Add version info
+      const versionInfo = document.createElement('div');
+      versionInfo.textContent = `Version: ${version}`;
+      label.appendChild(versionInfo);
+
+      // Add description
+      //const description = document.createElement('div');
+      //description.textContent = `Description: ${app.description || 'No description available.'}`;
+      //label.appendChild(description);
+
+      // Add size info
+      //const sizeInfo = document.createElement('div');
+      //sizeInfo.textContent = `Size: ${app.size || 'Unknown'}`;
+      //label.appendChild(sizeInfo);
+
+      // Append the label to the app element
+      appElement.appendChild(label);
+
+      // Append the app element to the apps container
+      appsContainer.appendChild(appElement);
+    });
+  } catch (error) {
+    console.error('Error fetching apps for selected device:', error);
+  }
+}
+
+async function loadDevices() {
+  try {
+    const response = await fetch('/api/devices');
+    if (!response.ok) throw new Error('Network response was not ok.');
+    const devices = await response.json();
+
+    const devicesSelect = document.getElementById('devices');
+    devicesSelect.innerHTML = ''; // Clear existing options
+    devices.forEach(device => {
+      // Format the lastContact date and determine the active status
+      const lastContactFormatted = device.lastContact === 'Never' ? 'Never' : new Date(device.lastContact).toLocaleString();
+      const isActive = device.active ? 'Active' : 'Inactive';
+
+      // Create the option element with detailed text
+      const option = document.createElement('option');
+      option.value = device.id;
+      option.textContent = `${device.name} - OS: ${device.os}, Arch: ${device.arch || 'Unknown'}) - Last contact: ${lastContactFormatted} - Status: ${isActive}`;
+      
+      // Set data attributes for further details if needed
+      option.setAttribute('data-os', device.os);
+      option.setAttribute('data-os-version', device.osVersion);
+      option.setAttribute('data-arch', device.arch);
+      option.setAttribute('data-hostname', device.hostname);
+      option.setAttribute('data-last-contact', device.lastContact);
+      option.setAttribute('data-active', device.active);
+      
+      devicesSelect.appendChild(option);
+    });
+
+    // After loading devices, load apps for the selected device
+    loadAppsForSelectedDevice();
+  } catch (error) {
+    console.error('Error fetching devices:', error);
+  }
+}
+
+
+
+// Add an event listener to the device select box to load apps when the device changes
+document.getElementById('devices').addEventListener('change', loadAppsForSelectedDevice);
+
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('/api/user-info');
+                if (!response.ok) {
+                    throw new Error('Failed to load user info');
+                }
+                const userInfo = await response.json();
+                document.getElementById('user-info').textContent = `Welcome, ${userInfo.name || 'User'}!`;
+            } catch (error) {
+                console.error('Error loading user info:', error);
+                document.getElementById('user-info').textContent = 'Welcome, User!';
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showNotification(message, isError=false) {
+        const notification = document.getElementById('notification');
+        const messageElement = document.getElementById('notification-message');
+        messageElement.textContent = message;
+        notification.style.backgroundColor = isError ? '#f44336' : '#4CAF50';
+        notification.style.display = 'block'; // Show notification when this function is called
+        }
+
+        function closeNotification() {
+            document.getElementById('notification').style.display = 'none';
+        }
+
+        async function installSoftware() {
+    const selectedApp = document.querySelector('#apps input[type="radio"]:checked');
+    const selectedDevice = document.getElementById('devices').value;
+    
+    if (!selectedApp) {
+        showNotification('Please select a software application.', true);
+        return;
+    }
+
+    if (!selectedDevice) {
+        showNotification('Please select a device.', true);
+        return;
+    }
+
+    showLoading();
+    try {
+        const response = await fetch('/api/install', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                appId: selectedApp.value,
+                deviceId: selectedDevice
+            })
+        });
+        
+        // If the response is not OK and there is a message in the response body, use it.
+        if (!response.ok) {
+            const errorBody = await response.json();
+            throw new Error(errorBody.message || 'Failed to initiate installation');
+        }
+        
+        const data = await response.json();
+        showNotification(`Installation ${data.status}`);
+    } catch (error) {
+        console.error('Error initiating installation:', error);
+        showNotification(error.message || 'Error initiating installation', true);
+    } finally {
+        hideLoading();
+    }
+}
+
+
+window.onload = async function() {
+    showLoading(); // Show the loading overlay
+    await loadUserInfo();
+    await loadDevices(); // This will automatically call loadAppsForSelectedDevice
+    hideLoading(); // Hide the loading overlay
+    closeNotification(); // Hide the notification on initial load
+};
+
+    </script>
+<div id="loading" class="loading-overlay">
+    <div class="loading-spinner"></div>
+</div>
+</body>
+</html>
