@@ -201,7 +201,7 @@ def install():
     headers = {'x-api-key': JUMP_CLOUD_API_KEY, 'Content-Type': 'application/json'}
     payload = {'op': 'add', 'type': 'system', 'id': device_id}
     response = requests.post(url, headers=headers, json=payload)
-    status = 'Initiated' if response.status_code == 200 else 'Failed or already installed'
+    status = 'Initiated' if response.status_code in [200, 204] else 'Failed or already installed'
     return jsonify({'status': status})
 
 @app.route('/login')
